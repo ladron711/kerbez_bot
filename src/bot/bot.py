@@ -1,7 +1,6 @@
-import os
 import asyncio
-from datetime import date
 from pathlib import Path
+import signal
 
 
 from aiogram import Bot, Dispatcher
@@ -20,6 +19,10 @@ from src.config import BOT_TOKEN
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+parser_running = False
+
+PARSER_TIMEOUT = 1800
+
 
 @dp.message(Command("start"))
 async def help(message: Message):
@@ -28,33 +31,41 @@ async def help(message: Message):
 
 @dp.message(lambda message: message.text == "🔄 поиск лотов")
 async def parse_button(message: Message):
-    await message.answer("начинаю поиск")
+    global parser_running
+
+    if parser_running:
+        await message.answer("поиск уже запущен, подождите")
+        return
+    
+    parser_running = True
+    await message.answer("поиск лотов ⏳")
+
 
     try:
-        run_parser()
+        await asyncio.wait_for(asyncio.to_thread(run_parser), timeout=PARSER_TIMEOUT)
         await message.answer("поиск завершен")
-        try:
-            lots = get_all_lots()
-            active_lots = [lot for lot in lots
-            if is_active(lot[4])]
-        
-            if not active_lots:
-                await message.answer("❌ Нет активных лотов")
-
-                return
-                
-            for lot in active_lots:
-                await message.answer(format_lot(lot))
             
-            log("[bot] lots are formed")
+        lots = get_all_lots()
+        active_lots = [lot for lot in lots
+        if is_active(lot[4])]
+            
+        if not active_lots:
+            await message.answer("❌ Нет активных лотов")
+            return
+                    
+        for lot in active_lots:
+            await message.answer(format_lot(lot))
 
-        except Exception as e:
-            await message.answer("ошибка попробуйте позже")
-            log(f"[bot] error by getting lots from DB as {e}")
+    except asyncio.TimeoutError:
+        await message.answer("ошибка попробуйте позже")
+        log(f"[bot] error by timeout of parser")
     
     except Exception as e:
         await message.answer("ошибка, повторите позже")  
         log(f"[bot] error by parser running as {e}")
+    
+    finally:
+        parser_running = False
 
 
 @dp.message(lambda message: message.text == "📄 Скачать CSV")
@@ -68,16 +79,31 @@ async def csv_button(message: Message):
             await message.answer("❌ Файл с лотами не найден")
             return
         await message.answer_document(document = FSInputFile(file_path), caption = "📄 Лоты (CSV файл)")
-        log(f"[bot] CSV is formed")
     
     except Exception as e:
         await message.answer("Произошла ошибка при формировании файла")
         log(f"[bot] error by export to CSV as {e}")
     
 
+async def shutdown():
+    log("[bot] Shutting down...")
+    await bot.session.close()
+
+
 async def main():
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
+    log("[bot] Starting bot...")
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        log(f"[bot] error by running bot as {e}")
+        raise
+
+

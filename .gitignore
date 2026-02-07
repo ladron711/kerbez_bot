@@ -4,8 +4,10 @@ __pycache__/
 .venv/
 *.sqlite3
 *.db
-*.txt
-data/*.csv
+saved_lots_ids.txt
+data/*
+!data/.gitkeep
 .vscode/
-logs/*.log
+logs/*
+!logs/.gitkeep
 .DS_Store
