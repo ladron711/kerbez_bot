@@ -11,6 +11,8 @@ load_dotenv(BASE_DIR /".env")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+USER_IDS = [int(user) for user in os.getenv("USERS").split(',')]
+
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
@@ -26,6 +28,8 @@ PARAMS = {
             "count_record": COUNT_RECORD,
             "filter[kato]": KATO_ASTANA,
             "filter[end_date_from]": TODAY,
+            "filter[status][]": [220, 230, 210, 240],
+            "filter[method][]": [3, 2, 7, 77, 78, 32, 22, 124, 190, 126, 128, 177, 188, 130, 200],
         } 
 
 
@@ -47,11 +51,17 @@ KEYWORDS = [
     "текстил",
     "швейн",
     "куртк",
+    "курток",
+    "платье",
+    "платья",
+    "юбк",
+    "юбок",
     "брюк",
     "жилет",
     "халат",
     "фартук",
     "пальто",
+    "польт",
     "плащ",
     "рубаш",
     "фураж",
@@ -66,9 +76,7 @@ KEYWORDS = [
     "униформ",
 ]
 
-SEEN_IDS_FILE = "saved_lots_ids.txt"
 
-FULL_SCAN = False
 
 
 

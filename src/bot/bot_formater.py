@@ -1,22 +1,16 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
-def format_lot(lot: tuple) -> str:
+def format_lot(lot: dict) -> str:
     return(
-        f"🆔 {lot[0]}\n"
-        f"🎯 {lot[1]}\n"
-        f"💰 {lot[3]} тг.\n"
-        f"🗿 {lot[2]}\n"
-        f"📅 лот завершится: {lot[4]}\n"
-        f"-🔗 {lot[5]}\n"
+        f"🆔 {lot['lot_code']}\n"
+        f"🎯 {lot['title']}\n"
+        f"🖍 {lot.get('lot_name') or ''}\n"
+        f"💰 {lot['price']} тг.\n"
+        f"🗿 {lot['customer']}\n"
+        f"📅 лот завершится: {lot.get('end_date') or ''}\n"
+        f"-🔗 {lot['link']}\n"
         f"------------"
     )
 
-main_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🔄 поиск лотов")],
-        [KeyboardButton(text="📄 Скачать CSV")],
-    ],
-    resize_keyboard=True
-    
-)
+main_keyboard = ReplyKeyboardMarkup(keyboard = [[KeyboardButton(text="🔄 поиск лотов")]], resize_keyboard=True,)

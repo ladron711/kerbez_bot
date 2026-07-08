@@ -17,7 +17,7 @@ def warm_up():
         log("[fetcher] error exeption def warm_up")
         pass
 
-def fetch_page(url:str, params:dict | None = None, retries: int = 3, base_sleep: int = 3) ->str | None:
+def fetch_page(url:str, params:dict | None = None, retries: int = 3) ->str | None:
     for attempt in range(1, retries + 1):
         try:
             response = session.get(url, params=params, timeout=30)

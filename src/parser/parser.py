@@ -39,6 +39,9 @@ def parse_data(html: str) -> list[dict]:
         customer_tag = cols[1].find("small")
         customer = (customer_tag.get_text(strip=True) if customer_tag else None)
 
+        lot_name_tag = cols[2].find("strong")
+        lot_name = (lot_name_tag.get_text(strip=True) if lot_name_tag else None)
+
         price_tag = cols[4].find("strong")
         price = (price_tag.get_text(strip=True) if price_tag else None)
         
@@ -50,6 +53,7 @@ def parse_data(html: str) -> list[dict]:
             {
                 "lot_code": lot_code,
                 "title": title,
+                "lot_name": lot_name,
                 "link": link,
                 "customer": customer,
                 "price": price,

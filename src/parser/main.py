@@ -1,23 +1,31 @@
 import time
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.parser.fetcher import fetch_page, warm_up
 from src.parser.parser import parse_data
 from src.parser.normalizer import normalize_data
 from src.parser.filters import filter_lots 
-from src.storage import save_to_db, load_seen_ids, save_seen_ids
-from src.parser.card_parser import parse_lot_status, parse_date_start, parse_date_end
-from src.config import PARAMS, KEYWORDS, FULL_SCAN
+from src.parser.card_parser import parse_date_end
+from src.config import PARAMS, KEYWORDS
 from src.parser.logger import log
+
+
+def fetch_end_date(lot: dict) -> dict:
+    html = fetch_page(lot["link"])
+    if not html:
+        return lot
+
+    lot["end_date"] = parse_date_end(html)
+    return lot
 
 
 def main():
     log("[main] start parsing")
     warm_up()
 
-    seen_ids: set[str] = load_seen_ids()
-    new_lots: list[dict] = []
-
     page = 1
+
+    normalized_lots = []
 
     while True:
         params = PARAMS.copy()
@@ -30,59 +38,34 @@ def main():
             break
 
         lots = parse_data(html)
-       
+        
+        
         if not lots:
+            log("[main] no more lots -> stop")
             break
-
-        all_known = True
 
         for lot in lots:
-            normalized = normalize_data(lot)
-            lot_code = normalized.get("lot_code")
-
-            if not lot_code:
-                continue
-            
-            already_seen = lot_code in seen_ids
-
-            if not already_seen:
-                all_known = False
-
-            seen_ids.add(lot_code)
-
-            if not FULL_SCAN and already_seen:
-                continue
-
-            new_lots.append(normalized)
-
-        if not FULL_SCAN and all_known:
-            break
+            normalized_lots.append(normalize_data(lot))
 
         page += 1
         time.sleep(2)
 
-    if not new_lots:
+    if not normalized_lots:
+        log("[main] no normalized lots found")
         return
     
-    filtered_lots = filter_lots(new_lots, keywords=KEYWORDS)
+    filtered_lots = filter_lots(normalized_lots, keywords=KEYWORDS)
 
-    for i, lot in enumerate(filtered_lots, start=1):
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(fetch_end_date, lot) for lot in filtered_lots]
+        for future in as_completed(futures):
+            try:
+                lot = future.result()
+            except Exception as e:
+                log(f"[main] error occurred while fetching end date for lot: {e}")
 
-        html = fetch_page(lot["link"])
-        if not html:
-            continue
+    return filtered_lots
 
-        lot["status"] = parse_lot_status(html)
-        lot["start_date"] = parse_date_start(html)
-        lot["end_date"] = parse_date_end(html)
-
-        time.sleep(1)
-
-    active_lots = filter_lots(filtered_lots, only_active=True)
-
-    save_to_db(active_lots)
-    save_seen_ids(seen_ids)
-    log("[main]===parser finished successfully ===")
 
 if __name__ == "__main__":
     main()

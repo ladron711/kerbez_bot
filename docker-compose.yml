@@ -1,0 +1,8 @@
+services:
+  kerbez-bot:
+    build: .
+    image: kerbez-bot:latest
+    container_name: kerbez-bot
+    env_file:
+      - .env
+    restart: unless-stopped
