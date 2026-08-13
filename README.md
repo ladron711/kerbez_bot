@@ -15,7 +15,7 @@ A Telegram bot that monitors the public procurement website and shows currently 
 - Displays key information: name, sum, owner, and end date of each lot
 
 ## Project Structure
-
+```
 kerbez_pars_bot/
 ├── src/
 │   ├── bot/
@@ -37,7 +37,7 @@ kerbez_pars_bot/
 ├── .dockerignore
 ├── .gitignore
 └── .env.example
-
+```
 ## Environment Variables
 Create a `.env` file in the root directory 
 
