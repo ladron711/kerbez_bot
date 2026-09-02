@@ -17,7 +17,7 @@ if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
 
-BASE_URL = "https://goszakup.gov.kz"
+BASE_URL = "https://old.goszakup.gov.kz"
 
 KATO_ASTANA = "710000000"
 

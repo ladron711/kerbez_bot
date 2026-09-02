@@ -1,107 +1,137 @@
 # Kerbez Bot
 
-A Telegram bot that monitors the public procurement website and shows currently active purchases matching configured filters.
+A Telegram bot that scrapes the Kazakhstan public procurement portal
+[goszakup.gov.kz](https://goszakup.gov.kz/) for active lots matching a fixed set
+of clothing / textile / uniform keywords and delivers them to an allowlist of
+Telegram users — on demand and once a day on a schedule.
 
 ## Stack
 
-**Backend:** Python, BeautifulSoup4, Requests  
-**Bot:** Python, aiogram, apscheduler  
-**Infrastructure:** Docker, Docker Compose
+**Scraper:** Python, Requests, BeautifulSoup4 (`lxml`)
+**Bot:** Python, aiogram v3, APScheduler
+**Deploy:** Docker / Linux server
+
+There is no database. The bot holds no state between runs and does not
+deduplicate lots — a scheduled run resends any lot that is still active.
 
 ## Features
 
-- Automatically monitors [goszakup.gov.kz](https://goszakup.gov.kz/) for new purchases
-- Returns only active lots matching configured filters
-- Displays key information: name, sum, owner, and end date of each lot
+- Scrapes `goszakup.gov.kz/ru/search/lots` for active lots, filtered server-side
+  by region (Astana), status and procurement method (see `PARAMS` in
+  `src/config.py`).
+- Keeps only lots whose title or name contains one of the keyword stems in
+  `KEYWORDS` (`src/config.py`).
+- For each matching lot, fetches its card page to read the bidding end date.
+- Sends each lot to Telegram: lot code, title, lot name, price, customer, end
+  date and link (`src/bot/bot_formater.py`).
+- Access is restricted to the Telegram user IDs listed in the `USERS`
+  environment variable.
+- Daily broadcast to all allowed users at 11:03 `Asia/Almaty`.
 
 ## Project Structure
+
 ```
 kerbez_pars_bot/
 ├── src/
+│   ├── config.py            # BOT_TOKEN/USERS loading, scrape PARAMS, HEADERS, KEYWORDS
 │   ├── bot/
-│   │   ├── bot.py             # Main function for bot and polling
-│   │   ├── bot_formater.py    # Function for message format and keyboard
-│   │   └── bot_logger.py      # Shows log messages with date
-│   ├── parser/
-│   │   ├── card_parser.py     # Function for getting end date of lot
-│   │   ├── fetcher.py         # Warming up, creating Session, fetches a text of pages
-│   │   ├── filters.py         # Function of search filters
-│   │   ├── logger.py          # Shows log messages with date
-│   │   ├── main.py            # Main parsing function
-│   │   ├── normalizer.py      # Format function of data
-│   │   └── parser.py          # Parsing of fetched data
-│   └──config.py               # Configuration for bot and search parameters 
-├── requirements.txt
+│   │   ├── bot.py           # aiogram entry point, access middleware, scheduler
+│   │   ├── bot_formater.py  # lot message formatting + reply keyboard
+│   │   └── bot_logger.py    # timestamped print logger
+│   └── parser/
+│       ├── main.py          # scrape pipeline orchestrator, returns list[dict] | None
+│       ├── fetcher.py       # shared requests.Session, warm-up, retrying GET
+│       ├── parser.py        # BeautifulSoup parsing of the search-result table
+│       ├── normalizer.py    # price/link/customer cleanup, announce_id extraction
+│       ├── filters.py       # keyword filtering
+│       ├── card_parser.py   # reads "срок окончания" (end date) from a lot card
+│       └── logger.py        # timestamped print logger
 ├── Dockerfile
 ├── docker-compose.yml
-├── .dockerignore
-├── .gitignore
+├── requirements.txt
 └── .env.example
 ```
+
 ## Environment Variables
-Create a `.env` file in the root directory 
+
+Create a `.env` file in the repository root:
+
+| Variable    | Description                                                        |
+|-------------|------------------------------------------------------------------|
+| `BOT_TOKEN` | Telegram bot token from @BotFather. Required.                     |
+| `USERS`     | Comma-separated Telegram user IDs allowed to use the bot and to receive the daily broadcast, e.g. `12345678,87654321`. Required. |
+
+Both variables are read at import time in `src/config.py`; the app will not start
+if either is missing.
 
 ## Installation and Running
 
 ### Prerequisites
 
-- Docker and Docker Compose installed on your server
-- Git installed
+- Python 3.10+ (Docker image uses 3.12)
+- Git
 
 ### Steps
+
 1. Clone the repository
-```bash
-git clone https://github.com/ladron711/kerbez_bot.git
-cd kerbez_bot
-```
-2. Create `.env` file based on `.env.example` and fill in all variables
 
-| Variable    | Description                          |
-|-------------|--------------------------------------|
-| `BOT_TOKEN` | Telegram bot token from @BotFather   |
-| `USERS` | Telegram id of bot users |
+   ```bash
+   git clone https://github.com/ladron711/kerbez_bot.git
+   cd kerbez_bot
+   ```
 
-3. Build and start containers
+2. Install dependencies
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Create the `.env` file (see [Environment Variables](#environment-variables)).
+
+4. Run the bot from the repository root:
+
+   ```bash
+   python -m src.bot.bot
+   ```
+
+   All imports are absolute from the `src` package, so the bot must be started
+   as a module from the repo root (`python src/bot/bot.py` will fail).
+
+### Run the scraper without Telegram
+
 ```bash
-docker compose up --build -d
+python -m src.parser.main
 ```
-4. The bot is now running and ready to use
+
+Runs the full scrape pipeline and logs progress; useful for debugging selectors
+and filters.
+
+### Docker
+
+```bash
+docker compose up --build      # foreground
+docker compose up -d           # detached
+```
+
+The container reads `.env` via `env_file` and runs `python3 -m src.bot.bot`.
 
 ## How It Works
 
-### Searching for purchases
+1. `/start` shows a keyboard with a single button, **🔄 поиск лотов**.
+2. Pressing the button (or the daily 11:03 `Asia/Almaty` scheduler) runs the
+   scraper in a background thread with a 30-minute timeout. Concurrent triggers
+   share the same run rather than starting a second scrape.
+3. The scraper (`src/parser/main.py`):
+   - warms up a `requests.Session`, then pages through the search results using
+     `PARAMS` from `src/config.py`;
+   - parses each results table row (`src/parser/parser.py`) and normalizes it
+     (`src/parser/normalizer.py`);
+   - filters lots by the `KEYWORDS` stems (`src/parser/filters.py`);
+   - fetches each surviving lot's card page (5 worker threads) to extract the
+     bidding end date (`src/parser/card_parser.py`).
+4. Each lot is sent as a separate Telegram message. On a manual search the
+   replies go to the requester; the scheduled run broadcasts to every ID in
+   `USERS`.
 
-- User starts the bot with `/start`
-- Two options are available:
-  - **Search purchases** — runs the parser and returns matching results
-  - **Daily report at 11:03** — automatically message with parsed data
-Search filters are hardcoded in `config.py`.
-The bot parses the public procurement website and returns only active lots
-that match the configured filters. For each lot the bot shows:
-- Name of the purchase
-- Total sum
-- Owner of the purchase
-- End date of the purchase
-
-### Implementation notes
-
-**Server-side filtering.** Lot status, city (KATO), and purchase method are
-filtered via URL parameters on the source website, not after downloading —
-so the parser only ever receives lots that are already relevant.
-
-**Parallel detail fetching.** The end date of a lot is only available on its
-individual page, not in the search results table. After keyword filtering,
-the bot fetches these pages in parallel (up to 5 concurrent requests via
-`ThreadPoolExecutor`) instead of sequentially. If a single request fails,
-that lot is still returned — just without an end date — so one network
-error doesn't break the entire search.
-
-**Single-flight parsing.** If a user triggers a search while another one is
-already running, the second request joins the in-progress task instead of
-starting a duplicate crawl. This means the scheduled daily report will still
-be delivered even if a manual search started moments before it.
-
-**Stateless by design.** The bot stores nothing between runs — no database,
-no seen-lot tracking. Every search returns a fresh snapshot of what is
-currently open for bids.
-
+To change **what** is scraped or matched, edit `src/config.py` (`PARAMS` and
+`KEYWORDS`) — not the parser modules.

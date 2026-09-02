@@ -6,7 +6,7 @@ from src.parser.parser import parse_data
 from src.parser.normalizer import normalize_data
 from src.parser.filters import filter_lots 
 from src.parser.card_parser import parse_date_end
-from src.config import PARAMS, KEYWORDS
+from src.config import PARAMS, KEYWORDS, BASE_URL
 from src.parser.logger import log
 
 
@@ -31,7 +31,7 @@ def main():
         params = PARAMS.copy()
         params["page"] = page
 
-        html = fetch_page("https://goszakup.gov.kz/ru/search/lots", params=params)
+        html = fetch_page(f"{BASE_URL}/ru/search/lots", params=params)
 
         if not html:
             log("[main] server error -> stop")
