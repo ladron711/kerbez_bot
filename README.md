@@ -1,8 +1,8 @@
 # Kerbez Bot
 
-A Telegram bot that scrapes the Kazakhstan public procurement portal
-[goszakup.gov.kz](https://goszakup.gov.kz/) for active lots matching a fixed set
-of clothing / textile / uniform keywords and delivers them to an allowlist of
+A Telegram bot that scrapes the Kazakhstan public procurement portal (set via
+the `BASE_URL` environment variable) for active lots matching a fixed set of
+clothing / textile / uniform keywords and delivers them to an allowlist of
 Telegram users — on demand and once a day on a schedule.
 
 ## Stack
@@ -16,9 +16,9 @@ deduplicate lots — a scheduled run resends any lot that is still active.
 
 ## Features
 
-- Scrapes `goszakup.gov.kz/ru/search/lots` for active lots, filtered server-side
-  by region (Astana), status and procurement method (see `PARAMS` in
-  `src/config.py`).
+- Scrapes the portal's `/ru/search/lots` endpoint (`BASE_URL` + path) for active
+  lots, filtered server-side by region (Astana), status and procurement method
+  (see `PARAMS` in `src/config.py`).
 - Keeps only lots whose title or name contains one of the keyword stems in
   `KEYWORDS` (`src/config.py`).
 - For each matching lot, fetches its card page to read the bidding end date.
@@ -33,7 +33,7 @@ deduplicate lots — a scheduled run resends any lot that is still active.
 ```
 kerbez_pars_bot/
 ├── src/
-│   ├── config.py            # BOT_TOKEN/USERS loading, scrape PARAMS, HEADERS, KEYWORDS
+│   ├── config.py            # BOT_TOKEN/USERS/BASE_URL loading, scrape PARAMS, HEADERS, KEYWORDS
 │   ├── bot/
 │   │   ├── bot.py           # aiogram entry point, access middleware, scheduler
 │   │   ├── bot_formater.py  # lot message formatting + reply keyboard
@@ -60,9 +60,10 @@ Create a `.env` file in the repository root:
 |-------------|------------------------------------------------------------------|
 | `BOT_TOKEN` | Telegram bot token from @BotFather. Required.                     |
 | `USERS`     | Comma-separated Telegram user IDs allowed to use the bot and to receive the daily broadcast, e.g. `12345678,87654321`. Required. |
+| `BASE_URL`  | Base URL of the procurement portal the scraper targets (scheme + host, no trailing slash). Required. |
 
-Both variables are read at import time in `src/config.py`; the app will not start
-if either is missing.
+All three variables are read at import time in `src/config.py`; the app will not
+start if any of them is missing.
 
 ## Installation and Running
 

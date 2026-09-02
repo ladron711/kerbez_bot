@@ -13,11 +13,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 USER_IDS = [int(user) for user in os.getenv("USERS").split(',')]
 
+BASE_URL = os.getenv("BASE_URL")
+
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set in environment")
 
-
-BASE_URL = "https://old.goszakup.gov.kz"
+if not BASE_URL:
+    raise RuntimeError("BASE_URL is not set in environment")
 
 KATO_ASTANA = "710000000"
 
