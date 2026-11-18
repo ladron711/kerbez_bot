@@ -39,7 +39,7 @@ kerbez_pars_bot/
 │   │   ├── bot_formater.py  # lot message formatting + reply keyboard
 │   │   └── bot_logger.py    # timestamped print logger
 │   └── parser/
-│       ├── main.py          # scrape pipeline orchestrator, returns list[dict] | None
+│       ├── main.py          # scrape pipeline orchestrator, returns ParseResult
 │       ├── fetcher.py       # shared requests.Session, warm-up, retrying GET
 │       ├── parser.py        # BeautifulSoup parsing of the search-result table
 │       ├── normalizer.py    # price/link/customer cleanup, announce_id extraction
@@ -136,3 +136,27 @@ The container reads `.env` via `env_file` and runs `python3 -m src.bot.bot`.
 
 To change **what** is scraped or matched, edit `src/config.py` (`PARAMS` and
 `KEYWORDS`) — not the parser modules.
+
+## Error handling and local tests
+
+The parser returns `ParseResult` with `success`, `partial`, or `error` status.
+An empty results table ends pagination; missing tables, missing table bodies,
+and malformed result rows are errors. A failed search page stops pagination
+and records its number. Previously collected lots remain available as a partial
+result. Failed cards remain in the result without a confirmed end date.
+Partial results are sent with a separate warning; individual Telegram failures
+do not stop the remaining deliveries. No persistent retry queue is maintained.
+
+Parser summary logs include `found`, `filtered`, `processed` (cards with an
+extracted end date), `load_errors` (search/card loads that exhausted retries),
+`parse_errors`, and `failed_page`. Delivery summaries count successful and
+failed **lot messages**; service notifications are logged separately.
+
+Run the offline error-handling tests with the project dependencies installed:
+
+```bash
+python -B -m unittest discover -s tests -v
+```
+
+Tests use dummy configuration and mocked HTTP/Telegram calls, and block socket
+connections. They do not start the scheduler or polling.

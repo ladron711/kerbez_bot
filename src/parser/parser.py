@@ -1,5 +1,8 @@
 from bs4 import BeautifulSoup
-from src.parser.logger import log
+
+
+class InvalidSearchPage(ValueError):
+    """The response cannot be interpreted as a search results page."""
 
 
 def parse_data(html: str) -> list[dict]:
@@ -7,13 +10,11 @@ def parse_data(html: str) -> list[dict]:
 
     table = soup.find("table", id="search-result")
     if not table:
-        log("[normalizer] table not found")
-        return []
+        raise InvalidSearchPage("search-result table not found")
     
     tbody = table.find("tbody")
     if not tbody:
-        log("[normalizer] tbody not found")
-        return []
+        raise InvalidSearchPage("search-result tbody not found")
     
     rows = tbody.find_all("tr")
 
@@ -23,15 +24,15 @@ def parse_data(html: str) -> list[dict]:
 
         cols = row.find_all("td")
         if len(cols) < 6:
-            continue
+            raise InvalidSearchPage("result row has fewer than six columns")
 
         lot_code = cols[0].get_text(strip=True)
         if not lot_code:
-            continue
+            raise InvalidSearchPage("result row has no lot code")
 
         link_tag = cols[1].find("a")
-        if not link_tag:
-            continue
+        if not link_tag or not link_tag.get("href"):
+            raise InvalidSearchPage("result row has no link")
 
         title = link_tag.get_text(strip=True)
         link = link_tag.get("href")
@@ -47,7 +48,7 @@ def parse_data(html: str) -> list[dict]:
         
         method = cols[5].get_text(strip=True)
         if not method:
-            continue
+            raise InvalidSearchPage("result row has no method")
 
         lots.append(
             {
